@@ -57,10 +57,10 @@ M: particule interact 2drop ;
     { 0 40 } 0.5 pick <immobile-spring>
     
     { -200 0 } { 0 0 } 1 t <particule> 
-    { -200 100 } 1 pick <immobile-spring>
+    { -200 100 } 1.0 pick <immobile-spring>
 
-    ! { 300 0 } { 0 0 } 1 t <particule> 
-    ! { 200 100 } 1 pick <immobile-spring>
+    { 300 0 } { 0 0 } 1 t <particule> 
+    { 200 100 } 1.0 pick <immobile-spring>
     ] output>array >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
