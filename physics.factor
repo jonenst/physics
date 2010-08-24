@@ -40,7 +40,7 @@ M: particule interact 2drop ;
      system-seconds [ swap time>> - ] [ >>time drop ] 2bi ;
 : world-loop ( world -- )
    [ dup dt step ] [ relayout-1 ] 
-   [ dup running?>> [ 1/20 seconds sleep world-loop ] [ drop ] if ] tri ;
+   [ dup running?>> [ yield world-loop ] [ drop ] if ] tri ;
 
 : invert-y ( {x,y} -- {x,y}' ) first2 neg 2array ;
 : {x,y}>{px,py} ( gadget {x,y} -- {px,py} )
@@ -53,11 +53,14 @@ M: particule interact 2drop ;
 : <physics-world> ( -- world )
     physics-world new
     [
-    { 160 -140 } { -300 0 } 1 t <particule> 
+    { 160 -140 } { -150 0 } 1 t <particule> 
     { 0 40 } 0.5 pick <immobile-spring>
     
-    { -50 0 } { 0 0 } 1 t <particule> 
-    { -50 0 } 1 pick <immobile-spring>
+    { -200 0 } { 0 0 } 1 t <particule> 
+    { -200 100 } 1 pick <immobile-spring>
+
+    ! { 300 0 } { 0 0 } 1 t <particule> 
+    ! { 200 100 } 1 pick <immobile-spring>
     ] output>array >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
