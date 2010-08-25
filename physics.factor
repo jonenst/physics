@@ -1,18 +1,18 @@
 ! Copyright (C) 2010 Jon Harper.
 ! See http://factorcode.org/license.txt for BSD license.
 USING: accessors arrays calendar calendar.unix colors.constants
-combinators.smart kernel math math.functions math.rectangles math.vectors opengl
+combinators.smart generalizations kernel math math.functions
+math.ranges math.rectangles math.vectors opengl random
 sequences threads ui.gadgets ui.gestures ui.render ;
 IN: physics
 
 CONSTANT: g { 0 -9.81 }
-CONSTANT: k 0.49 
 
 GENERIC# interact 1 ( particule dt -- )
 
 TUPLE: physics-world < gadget particules time running? ;
 TUPLE: particule x v m mobile? ;
-TUPLE: spring < particule k particule ;
+TUPLE: spring < particule k l0 particule ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
 : dx ( dt v -- dx ) n*v ;
@@ -21,8 +21,12 @@ TUPLE: spring < particule k particule ;
 : weight ( particule -- force ) m>> [ g n*v ] [ { 0 0 } ] if* ;
 : apply-g ( particule dt -- )
     [ dup weight ] [ apply-force ] bi* ;
+: l0-scale-factor ( force spring -- force )
+    l0>> over norm [ swap - ] keep / v*n ;
+: (apply-k) ( spring particule -- force )
+    [ [ x>> ] bi@ v- ] [ drop l0-scale-factor ] [ drop k>> ] 2tri v*n ;
 : apply-k ( particule spring dt -- )
-    [ [ drop ] [ swap [ x>> ] bi@ v- ] [ nip k>> ] 2tri v*n ] [ apply-force ] bi* ;
+    [ over (apply-k) ] [ apply-force ] bi* ;
 : move-particle ( particule dt -- )
     over mobile?>> [ 
         over v>> dx [ v+ ] curry change-x drop 
@@ -47,21 +51,19 @@ M: particule interact 2drop ;
     [ rect-bounds nip 2 v/n ] [ invert-y ] bi* v+ ;
 
 : <particule> ( x v m mobile? -- particule ) particule boa ;
-: <spring> ( x v m mobile? k particule -- spring ) spring boa ;
-: <immobile-spring> ( x k particule -- spring ) [ f f f ] 2dip spring boa ;
+: <spring> ( x v m mobile? k l0 particule -- spring ) spring boa ;
+: <immobile-spring> ( x k l0 particule -- spring ) [ f f f ] 3dip <spring> ;
     
+: random-spring ( -- spring particule )
+    2 -200 200 [a,b] [ random ] curry replicate { 0 0 } 1 t <particule>
+    2 -200 200 [a,b] [ random ] curry replicate
+    0 1 uniform-random-float 100 random 4 npick <immobile-spring> ;
+
+: random-springs ( n -- seq )
+    [ random-spring 2array ] replicate concat ;
 : <physics-world> ( -- world )
     physics-world new
-    [
-    { 160 -140 } { -150 0 } 1 t <particule> 
-    { 0 40 } 0.5 pick <immobile-spring>
-    
-    { -200 0 } { 0 0 } 1 t <particule> 
-    { -200 100 } 1.0 pick <immobile-spring>
-
-    { 300 0 } { 0 0 } 1 t <particule> 
-    { 200 100 } 1.0 pick <immobile-spring>
-    ] output>array >>particules ;
+    100 random-springs >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
 M: particule draw-particule
