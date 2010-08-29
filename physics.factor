@@ -68,15 +68,13 @@ M: lintal interact
 : <physics-world> ( -- world )
     physics-world new
     [
-    { 160 -140 } { -150 0 } 1 t <particule>
-    { 0 40 } 0.5 pick <immobile-spring>
-
-    { -200 0 } { 0 0 } 1 t <particule>
-    { -200 100 } 1.0 pick <immobile-spring>
-
-    { 300 0 } { 0 0 } 1 t <particule>
-    { 200 100 } 1.0 pick <immobile-spring>
-    ] output>array dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintal> suffix >>particules ;
+    { 20 -100 } { 0 0 } 1 t <particule>
+    dup [ { -20 -40 } { 0 0 } 1.0 t 0.5 ] dip <spring>
+    ! dup [ { 1 0 } { 0 0 } 1.0 t 0.5 ] dip <spring>
+    { 0 100 } 1.0 pick <immobile-spring>
+    ] output>array
+    ! dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintal> suffix
+    >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
 M: particule draw-particule
