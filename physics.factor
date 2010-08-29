@@ -22,8 +22,10 @@ TUPLE: lintal < particule dim { bouncy initial: 1.0 } particules ;
 : weight ( particule -- force ) m>> [ g n*v ] [ { 0 0 } ] if* ;
 : apply-g ( particule dt -- )
     [ dup weight ] [ apply-force ] bi* ;
+: spring-force ( particule spring -- force )
+    [ swap [ x>> ] bi@ v- ] [ nip k>> ] 2bi v*n ;
 : apply-k ( particule spring dt -- )
-    [ [ drop ] [ swap [ x>> ] bi@ v- ] [ nip k>> ] 2tri v*n ] [ apply-force ] bi* ;
+    [ 2dup spring-force dup vneg ] [ [ apply-force ] curry bi-curry@ bi* ] bi* ;
 : find-side ( rect particule -- pos )
     [ [ x>> ] [ dim>> ] bi ] [ x>> ] bi* 2drop ;
 : move-to-side ( rect particule -- )
