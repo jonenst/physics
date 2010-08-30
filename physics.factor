@@ -13,7 +13,7 @@ GENERIC# interact 1 ( particule dt -- )
 TUPLE: physics-world < gadget particules time running? ;
 TUPLE: particule x v m mobile? ;
 TUPLE: spring < particule k l0 particule ;
-TUPLE: lintal < particule dim { bouncy initial: 1.0 } particules ;
+TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
 : dx ( dt v -- dx ) n*v ;
@@ -32,9 +32,9 @@ TUPLE: lintal < particule dim { bouncy initial: 1.0 } particules ;
     [ [ x>> ] [ dim>> ] bi ] [ x>> ] bi* 2drop ;
 : move-to-side ( rect particule -- )
     [ find-side ] keep x<< ;
-: lintal>rect ( lintal -- rect ) [ x>> ] [ dim>> ] bi <rect> ;
-: apply-contact ( lintal particule -- )
-    2dup swap [ x>> ] [ lintal>rect ] bi* contains-point? [ move-to-side ] [ 2drop ] if ;
+: lintel>rect ( lintel -- rect ) [ x>> ] [ dim>> ] bi <rect> ;
+: apply-contact ( lintel particule -- )
+    2dup swap [ x>> ] [ lintel>rect ] bi* contains-point? [ move-to-side ] [ 2drop ] if ;
 : move-particle ( particule dt -- )
     over mobile?>> [
         over v>> dx [ v+ ] curry change-x drop
@@ -42,7 +42,7 @@ TUPLE: lintal < particule dim { bouncy initial: 1.0 } particules ;
 M: spring interact
     [ [ particule>> ] keep ] [ apply-k ] bi* ;
 M: particule interact 2drop ;
-M: lintal interact
+M: lintel interact
     drop dup particules>> [ apply-contact ] with each ;
 : step ( world dt -- )
     [ particules>> ] dip
@@ -62,7 +62,7 @@ M: lintal interact
     [ {x,y}>{px,py} ] dip
     [ [ first2 ] [ second - ] bi* 2array ] keep ;
 
-: <lintal> ( x v m mobile? dim bouncy particules -- lintal ) lintal boa ;
+: <lintel> ( x v m mobile? dim bouncy particules -- lintel ) lintel boa ;
 : <particule> ( x v m mobile? -- particule ) particule boa ;
 : <spring> ( x v m mobile? k l0 particule -- spring ) spring boa ;
 : <immobile-spring> ( x k l0 particule -- spring ) [ f f f ] 3dip <spring> ;
@@ -86,7 +86,7 @@ M: lintal interact
     ! dup [ { 1 0 } { 0 0 } 1.0 t 0.5 ] dip <spring>
 !    { 0 100 } 1.0 pick <immobile-spring>
 !    ] output>array
-    ! dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintal> suffix
+    ! dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintel> suffix
 !    >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
@@ -96,7 +96,7 @@ M: particule draw-particule
 M: spring draw-particule
     [ COLOR: red gl-color [ particule>> x>> {x,y}>{px,py} ] [ x>> {x,y}>{px,py} ] 2bi gl-line ]
     [ call-next-method ] 2bi ;
-M: lintal draw-particule
+M: lintel draw-particule
     COLOR: purple gl-color [ x>> ] [ dim>> ] bi rectangle>screen gl-rect ;
 
 M: physics-world pref-dim* drop { 640 480 } ;
