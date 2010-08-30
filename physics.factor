@@ -13,6 +13,7 @@ GENERIC# interact 1 ( particule dt -- )
 TUPLE: physics-world < gadget particules time running? ;
 TUPLE: particule x v m mobile? ;
 TUPLE: spring < particule k l0 particule ;
+TUPLE: lintal < particule dim { bouncy initial: 1.0 } particules ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
 : dx ( dt v -- dx ) n*v ;
@@ -23,33 +24,45 @@ TUPLE: spring < particule k l0 particule ;
     [ dup weight ] [ apply-force ] bi* ;
 : l0-scale-factor ( force spring -- force )
     l0>> over norm [ swap - ] keep / v*n ;
-: (apply-k) ( spring particule -- force )
-    [ [ x>> ] bi@ v- ] [ drop l0-scale-factor ] [ drop k>> ] 2tri v*n ;
+: spring-force ( particule spring -- force )
+    [ swap [ x>> ] bi@ v- ] [ nip l0-scale-factor ] [ nip k>> ] 2tri v*n ;
 : apply-k ( particule spring dt -- )
-    [ over (apply-k) ] [ apply-force ] bi* ;
+    [ 2dup spring-force dup vneg ] [ [ apply-force ] curry bi-curry@ bi* ] bi* ;
+: find-side ( rect particule -- pos )
+    [ [ x>> ] [ dim>> ] bi ] [ x>> ] bi* 2drop ;
+: move-to-side ( rect particule -- )
+    [ find-side ] keep x<< ;
+: lintal>rect ( lintal -- rect ) [ x>> ] [ dim>> ] bi <rect> ;
+: apply-contact ( lintal particule -- )
+    2dup swap [ x>> ] [ lintal>rect ] bi* contains-point? [ move-to-side ] [ 2drop ] if ;
 : move-particle ( particule dt -- )
-    over mobile?>> [ 
-        over v>> dx [ v+ ] curry change-x drop 
-    ] [ 2drop ] if ; 
+    over mobile?>> [
+        over v>> dx [ v+ ] curry change-x drop
+    ] [ 2drop ] if ;
 M: spring interact
     [ [ particule>> ] keep ] [ apply-k ] bi* ;
 M: particule interact 2drop ;
+M: lintal interact
+    drop dup particules>> [ apply-contact ] with each ;
 : step ( world dt -- )
-    [ particules>> ] [ 
-        [ [ apply-g ] [ interact ] [ move-particle ] 2tri ] curry ] bi*
-    each ; 
+    [ particules>> ] dip
+    [ [ apply-g ] [ interact ] [ move-particle ] 2tri ] curry each ;
 : system-seconds ( -- dt )
     system-micros -6 10^ * ;
 : dt ( world -- dt )
      system-seconds [ swap time>> - ] [ >>time drop ] 2bi ;
 : world-loop ( world -- )
-   [ dup dt step ] [ relayout-1 ] 
+   [ dup dt step ] [ relayout-1 ]
    [ dup running?>> [ yield world-loop ] [ drop ] if ] tri ;
 
 : invert-y ( {x,y} -- {x,y}' ) first2 neg 2array ;
 : {x,y}>{px,py} ( gadget {x,y} -- {px,py} )
     [ rect-bounds nip 2 v/n ] [ invert-y ] bi* v+ ;
+: rectangle>screen ( gadget loc dim -- loc' dim' )
+    [ {x,y}>{px,py} ] dip
+    [ [ first2 ] [ second - ] bi* 2array ] keep ;
 
+: <lintal> ( x v m mobile? dim bouncy particules -- lintal ) lintal boa ;
 : <particule> ( x v m mobile? -- particule ) particule boa ;
 : <spring> ( x v m mobile? k l0 particule -- spring ) spring boa ;
 : <immobile-spring> ( x k l0 particule -- spring ) [ f f f ] 3dip <spring> ;
@@ -65,14 +78,27 @@ M: particule interact 2drop ;
     physics-world new
     100 random-springs >>particules ;
 
+! : <physics-world> ( -- world )
+!    physics-world new
+!    [
+!    { 20 -100 } { 0 0 } 1 t <particule>
+!    dup [ { -20 -40 } { 0 0 } 1.0 t 0.5 ] dip <spring>
+    ! dup [ { 1 0 } { 0 0 } 1.0 t 0.5 ] dip <spring>
+!    { 0 100 } 1.0 pick <immobile-spring>
+!    ] output>array
+    ! dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintal> suffix
+!    >>particules ;
+
 GENERIC: draw-particule ( gadget particule -- )
 M: particule draw-particule
     COLOR: black gl-color
     x>> {x,y}>{px,py} { 5 5 } gl-rect ;
-M: spring draw-particule 
+M: spring draw-particule
     [ COLOR: red gl-color [ particule>> x>> {x,y}>{px,py} ] [ x>> {x,y}>{px,py} ] 2bi gl-line ]
     [ call-next-method ] 2bi ;
-    
+M: lintal draw-particule
+    COLOR: purple gl-color [ x>> ] [ dim>> ] bi rectangle>screen gl-rect ;
+
 M: physics-world pref-dim* drop { 640 480 } ;
 M: physics-world draw-gadget*
     dup particules>> [ draw-particule ] with each ;
