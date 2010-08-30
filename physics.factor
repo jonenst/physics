@@ -1,9 +1,10 @@
 ! Copyright (C) 2010 Jon Harper.
 ! See http://factorcode.org/license.txt for BSD license.
 USING: accessors arrays calendar calendar.unix colors.constants
-combinators.smart generalizations kernel math math.functions
-math.ranges math.rectangles math.vectors opengl random
-sequences threads ui.gadgets ui.gestures ui.render ;
+combinators.smart fonts generalizations kernel math
+math.functions math.parser math.ranges math.rectangles
+math.vectors opengl random sequences threads ui.gadgets
+ui.gestures ui.render ui.text ;
 IN: physics
 
 CONSTANT: g { 0 -9.81 }
@@ -66,7 +67,7 @@ M: lintel interact
 : <particule> ( x v m mobile? -- particule ) particule boa ;
 : <spring> ( x v m mobile? k l0 particule -- spring ) spring boa ;
 : <immobile-spring> ( x k l0 particule -- spring ) [ f f f ] 3dip <spring> ;
-    
+
 : random-spring ( -- spring particule )
     2 -200 200 [a,b] [ random ] curry replicate { 0 0 } 1 t <particule>
     2 -200 200 [a,b] [ random ] curry replicate
@@ -90,9 +91,11 @@ M: lintel interact
 !    >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
+: particule-size ( particule -- size )
+    m>> [ dup 2array ] [ { 3 3 } ] if* ;
 M: particule draw-particule
     COLOR: black gl-color
-    x>> {x,y}>{px,py} { 5 5 } gl-rect ;
+    dup particule-size [ [ x>> {x,y}>{px,py} ] [ 2 v/n ] bi* v- ] keep gl-rect ;
 M: spring draw-particule
     [ COLOR: red gl-color [ particule>> x>> {x,y}>{px,py} ] [ x>> {x,y}>{px,py} ] 2bi gl-line ]
     [ call-next-method ] 2bi ;
