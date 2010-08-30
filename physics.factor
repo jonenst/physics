@@ -75,20 +75,20 @@ M: lintel interact
 
 : random-springs ( n -- seq )
     [ random-spring 2array ] replicate concat ;
-: <physics-world> ( -- world )
-    physics-world new
-    100 random-springs >>particules ;
-
 ! : <physics-world> ( -- world )
 !    physics-world new
-!    [
-!    { 20 -100 } { 0 0 } 1 t <particule>
-!    dup [ { -20 -40 } { 0 0 } 1.0 t 0.5 ] dip <spring>
-    ! dup [ { 1 0 } { 0 0 } 1.0 t 0.5 ] dip <spring>
-!    { 0 100 } 1.0 pick <immobile-spring>
-!    ] output>array
-    ! dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintel> suffix
-!    >>particules ;
+!    10 random-springs >>particules ;
+
+: <physics-world> ( -- world )
+   physics-world new
+   [
+   { 0 -100 } { 0 0 } 10 t <particule>
+  ! dup [ { 0 -40 } { 0 0 } 1.0 t 25.0 60.0 ] dip <spring>
+  ! dup [ { 1 0 } { 0 0 } 30.0 t 50.0 40 ] dip <spring>
+   dup [ { 0 60 } 10.0 160 ] dip <immobile-spring>
+   ] output>array
+!   dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintel> suffix
+   >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
 : particule-size ( particule -- size )
@@ -102,9 +102,24 @@ M: spring draw-particule
 M: lintel draw-particule
     COLOR: purple gl-color [ x>> ] [ dim>> ] bi rectangle>screen gl-rect ;
 
+GENERIC: particule-energy ( particule -- energy )
+M: particule particule-energy ( particule -- energy )
+    dup mobile?>> [
+        [ [ m>> ] [ x>> second ] bi g second neg * * ]
+        [ [ m>> ] [ v>> norm sq ] bi 0.5 * * ] bi +
+    ] [ drop 0 ] if ;
+M: spring particule-energy ( spring -- energy )
+    [ call-next-method ] [
+        [ [ dup particule>> [ x>> ] bi@ v- norm ] [ l0>> ] bi - sq ]
+        [ k>> ] bi 0.5 * *
+    ] bi + ;
+: energy ( world -- energy )
+    particules>> [ particule-energy ] [ + ] map-reduce ;
+
 M: physics-world pref-dim* drop { 640 480 } ;
 M: physics-world draw-gadget*
-    dup particules>> [ draw-particule ] with each ;
+    [ energy number>string "Total Energy : " prepend [ monospace-font ] dip draw-text ]
+    [ dup particules>> [ draw-particule ] with each ] bi ;
 
 : create-thread ( demo-gadget -- thread )
   [ world-loop ] curry "Physics thread" spawn ;
