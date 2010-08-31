@@ -1,60 +1,96 @@
 ! Copyright (C) 2010 Jon Harper.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors arrays calendar calendar.unix colors.constants
+USING: accessors arrays calendar calendar.unix colors.constants constructors
 combinators.smart fonts generalizations kernel math
 math.functions math.parser math.ranges math.rectangles
 math.vectors opengl random sequences threads ui.gadgets
-ui.gestures ui.render ui.text ;
+ui.gestures ui.render ui.text locals ;
 IN: physics
 
 CONSTANT: g { 0 -9.81 }
 
-GENERIC# interact 1 ( particule dt -- )
+GENERIC: interact ( particule -- )
 
 TUPLE: physics-world < gadget particules time running? ;
-TUPLE: particule x v m mobile? ;
+TUPLE: particule x v m mobile? { temp-force initial: { 0.0 0.0 } } ;
 TUPLE: spring < particule k l0 particule ;
 TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
 : dx ( dt v -- dx ) n*v ;
-: apply-force ( particule f dt -- )
+: (apply-force) ( particule f dt -- )
     pick m>> [ dv [ v+ ] curry change-v drop ] [ 3drop ] if* ;
+: apply-force ( particule dt -- )
+    [ [ dup temp-force>> ] dip (apply-force) ]
+    [ drop { 0.0 0.0 } >>temp-force drop ] 2bi ;
+: store-temp-force ( particule force -- )
+    [ v+ ] curry change-temp-force drop ;
+: apply-speed ( particule dt -- )
+    over v>> dx [ v+ ] curry change-x drop ;
+: move-particle ( particule dt -- )
+    over mobile?>> [
+        [ apply-force ] [ apply-speed ] 2bi
+    ] [ 2drop ] if ;
+
+
 : weight ( particule -- force ) m>> [ g n*v ] [ { 0 0 } ] if* ;
-: apply-g ( particule dt -- )
-    [ dup weight ] [ apply-force ] bi* ;
+: apply-g ( particule -- )
+    dup weight store-temp-force ;
+
 : l0-scale-factor ( force spring -- force )
     l0>> over norm [ swap - ] keep / v*n ;
 : spring-force ( particule spring -- force )
     [ swap [ x>> ] bi@ v- ] [ nip l0-scale-factor ] [ nip k>> ] 2tri v*n ;
-: apply-k ( particule spring dt -- )
-    [ 2dup spring-force dup vneg ] [ [ apply-force ] curry bi-curry@ bi* ] bi* ;
+: apply-mutual-force ( p1 p2 fp1/p2 -- )
+    dup vneg [ store-temp-force ] bi-curry@ bi* ;
+: apply-k ( particule spring -- )
+    2dup spring-force apply-mutual-force ;
+
 : find-side ( rect particule -- pos )
     [ [ x>> ] [ dim>> ] bi ] [ x>> ] bi* 2drop ;
 : move-to-side ( rect particule -- )
     [ find-side ] keep x<< ;
 : lintel>rect ( lintel -- rect ) [ x>> ] [ dim>> ] bi <rect> ;
+:: ((normal-vector)) ( {x,y} {X,Y} -- ? ? )
+    {x,y} first2 :> ( x y )
+    {X,Y} first2 :> ( X Y )
+    Y X / x * :> Y/X*x
+    Y/X*x y <
+    Y/X*x neg Y + y < ;
+: (normal-vector) ( lintel particule -- rel-pos dim )
+    [ swap [ x>> ] bi@ v- ] [ drop dim>> ] 2bi ;
+: normal-vector ( lintel particule -- v )
+    (normal-vector) ((normal-vector))
+    [ [ { 0 1 } ] [ { 1 0 } ] if ] [ [ { -1 0 } ] [ { 0 -1 } ] if ] if ;
+: (contact-force) ( lintel particule -- force )
+    [ normal-vector ] [ nip temp-force>> ] 2bi
+    over v. v*n ;
+: (apply-contact) ( lintel particule -- newspeed )
+!    [ 2dup (contact-force) apply-mutual-force ] call ; ! [ ?move-to-side ] 2bi ;
+    [ normal-vector reverse ] [ nip v>> ] 2bi over v. v*n ;
 : apply-contact ( lintel particule -- )
-    2dup swap [ x>> ] [ lintel>rect ] bi* contains-point? [ move-to-side ] [ 2drop ] if ;
-: move-particle ( particule dt -- )
-    over mobile?>> [
-        over v>> dx [ v+ ] curry change-x drop
-    ] [ 2drop ] if ;
+    [ (apply-contact) ] [ v<< ] bi ;
+: ?apply-contact ( lintel particule -- )
+    2dup swap [ x>> ] [ lintel>rect ] bi* contains-point? [ apply-contact ] [ 2drop ] if ;
+
+
 M: spring interact
-    [ [ particule>> ] keep ] [ apply-k ] bi* ;
-M: particule interact 2drop ;
+    [ particule>> ] keep apply-k ;
+M: particule interact drop ;
 M: lintel interact
-    drop dup particules>> [ apply-contact ] with each ;
+    dup particules>> [ ?apply-contact ] with each ;
 : step ( world dt -- )
     [ particules>> ] dip
-    [ [ apply-g ] [ interact ] [ move-particle ] 2tri ] curry each ;
+    [ drop [ apply-g ] each ]
+    [ drop [ interact ] each ]
+    [ [ move-particle ] curry each ] 2tri ;
 : system-seconds ( -- dt )
     system-micros -6 10^ * ;
 : dt ( world -- dt )
      system-seconds [ swap time>> - ] [ >>time drop ] 2bi ;
 : world-loop ( world -- )
    [ dup dt step ] [ relayout-1 ]
-   [ dup running?>> [ yield world-loop ] [ drop ] if ] tri ;
+   [ dup running?>> [ 1/30 seconds sleep world-loop ] [ drop ] if ] tri ;
 
 : invert-y ( {x,y} -- {x,y}' ) first2 neg 2array ;
 : {x,y}>{px,py} ( gadget {x,y} -- {px,py} )
@@ -63,10 +99,10 @@ M: lintel interact
     [ {x,y}>{px,py} ] dip
     [ [ first2 ] [ second - ] bi* 2array ] keep ;
 
-: <lintel> ( x v m mobile? dim bouncy particules -- lintel ) lintel boa ;
-: <particule> ( x v m mobile? -- particule ) particule boa ;
-: <spring> ( x v m mobile? k l0 particule -- spring ) spring boa ;
-: <immobile-spring> ( x k l0 particule -- spring ) [ f f f ] 3dip <spring> ;
+CONSTRUCTOR: lintel ( x v m mobile? dim bouncy particules --  lintel ) ;
+CONSTRUCTOR: particule ( x v m mobile? -- particule ) ;
+CONSTRUCTOR: spring ( x v m mobile? k l0 particule -- spring ) ;
+: <immobile-spring> ( x k l0 particule -- spring ) [ { 0 0 } f f ] 3dip <spring> ;
 
 : random-spring ( -- spring particule )
     2 -200 200 [a,b] [ random ] curry replicate { 0 0 } 1 t <particule>
@@ -82,12 +118,15 @@ M: lintel interact
 : <physics-world> ( -- world )
    physics-world new
    [
-   { 0 -100 } { 0 0 } 10 t <particule>
-  ! dup [ { 0 -40 } { 0 0 } 1.0 t 25.0 60.0 ] dip <spring>
-  ! dup [ { 1 0 } { 0 0 } 30.0 t 50.0 40 ] dip <spring>
-   dup [ { 0 60 } 10.0 160 ] dip <immobile-spring>
+    { 0 -110 } { 0 0 } 10 t <particule>
+     [ { -5 -45 } { 0 0 } 10.0 t 25.0 60.0 ] keep <spring>
+     [ { 10 0 } { 0 0 } 30.0 t 50.0 80 ] keep <spring>
+     [ { 0 60 } 50.0 70 ] keep <immobile-spring>
    ] output>array
-!   dup [ { 50 -150 } { 0 0 } 1 f { 200 200 } 1 ] dip <lintel> suffix
+   [ { 100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
+   [ { -100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
+   [ { -100 -200 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
+   [ { -100 50 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
    >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
