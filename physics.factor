@@ -1,6 +1,6 @@
 ! Copyright (C) 2010 Jon Harper.
 ! See http://factorcode.org/license.txt for BSD license.
-USING: accessors arrays calendar calendar.unix colors.constants constructors
+USING: accessors arrays calendar calendar.unix colors.constants combinators constructors
 combinators.smart fonts generalizations kernel math
 math.functions math.parser math.ranges math.rectangles
 math.vectors opengl random sequences threads ui.gadgets
@@ -9,7 +9,8 @@ IN: physics
 
 CONSTANT: g { 0 -9.81 }
 
-GENERIC: interact ( particule -- )
+GENERIC: interact1 ( particule -- )
+GENERIC: interact2 ( particule -- )
 
 TUPLE: physics-world < gadget particules time running? ;
 TUPLE: particule x v m mobile? { temp-force initial: { 0.0 0.0 } } ;
@@ -17,7 +18,7 @@ TUPLE: spring < particule k l0 particule ;
 TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
-: dx ( dt v -- dx ) n*v ;
+: dx ( dt v -- dx ) n*v ; inline
 : (apply-force) ( particule f dt -- )
     pick m>> [ dv [ v+ ] curry change-v drop ] [ 3drop ] if* ;
 : apply-force ( particule dt -- )
@@ -67,23 +68,44 @@ TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
     over v. v*n ;
 : project ( v1 v2 -- v3 )
     over v. v*n ;
-: apply-contact ( lintel particule -- )
-!    [ 2dup (contact-force) apply-mutual-force ] call ; ! [ ?move-to-side ] 2bi ;
-     [ normal-vector reverse ] keep [ project ] with
+: det ( v1 v2 -- n )
+    [ [ first ] [ second ] bi* * ] [ [ second ] [ first ] bi* * ] 2bi - ;
+: ?project ( v1 v2 -- v3 )
+    2dup det 0 > [ project ] [ nip ] if ;
+: invert-y ( {x,y} -- {x,y}' ) first2 neg 2array ;
+: rotate-90 ( v -- v' ) invert-y reverse ; inline
+: tangent-vector ( lintel particule -- v ) normal-vector rotate-90 ; inline
+
+: apply-normal-contact ( lintel particule -- )
+     [ tangent-vector ] keep [ ?project ] with
      [ change-v ] [ change-temp-force drop ] bi ;
+: tangent-speed ( lintel particule -- v )
+    [ tangent-vector ] [ nip v>> ] 2bi project ;
+: tangent-contact-k ( lintel particule -- k )
+    [ normal-vector ] [ nip temp-force>> ] 2bi project norm 0.1 * neg ; ! Todo c'est k
+: tangent-contact-force ( lintel particule -- force )
+    [ tangent-speed ] [ tangent-contact-k ] 2bi v*n  ;
+: apply-tangent-contact ( lintel particule -- )
+   2dup tangent-contact-force swapd apply-mutual-force ;
+: apply-contact ( lintel particule -- )
+    [ apply-tangent-contact ] [ apply-normal-contact ] 2bi ;
 : ?apply-contact ( lintel particule -- )
     2dup swap [ x>> ] [ lintel>rect ] bi* contains-point? [ apply-contact ] [ 2drop ] if ;
 
-M: spring interact
+M: spring interact1
     [ particule>> ] keep apply-k ;
-M: particule interact drop ;
-M: lintel interact
+M: spring interact2 drop ;
+M: particule interact1 drop ;
+M: particule interact2 drop ;
+M: lintel interact1 drop ;
+M: lintel interact2
     dup particules>> [ ?apply-contact ] with each ;
 : step ( world dt -- )
     [ particules>> ] dip
-    [ drop [ apply-g ] each ]
-    [ drop [ interact ] each ]
-    [ [ move-particle ] curry each ] 2tri ;
+    { [ drop [ apply-g ] each ]
+    [ drop [ interact1 ] each ]
+    [ drop [ interact2 ] each ]
+    [ [ move-particle ] curry each ] } 2cleave ;
 : system-seconds ( -- dt )
     system-micros -6 10^ * ;
 : dt ( world -- dt )
@@ -92,7 +114,6 @@ M: lintel interact
    [ dup dt step ] [ relayout-1 ]
    [ dup running?>> [ 1/30 seconds sleep world-loop ] [ drop ] if ] tri ;
 
-: invert-y ( {x,y} -- {x,y}' ) first2 neg 2array ;
 : {x,y}>{px,py} ( gadget {x,y} -- {px,py} )
     [ rect-bounds nip 2 v/n ] [ invert-y ] bi* v+ ;
 : rectangle>screen ( gadget loc dim -- loc' dim' )
@@ -104,11 +125,17 @@ CONSTRUCTOR: particule ( x v m mobile? -- particule ) ;
 CONSTRUCTOR: spring ( x v m mobile? k l0 particule -- spring ) ;
 : <immobile-spring> ( x k l0 particule -- spring ) [ { 0 0 } f f ] 3dip <spring> ;
 
+: random-pair ( [a,b] [c,d] -- pair )
+    [ random ] bi@ 2array ; inline
+: random-particule ( -- particule )
+    -200 200 [a,b] 0 200 [a,b] random-pair
+    2 -90 90 [a,b] [ random ] curry replicate 10 [1,b] random t <particule> ;
 : random-spring ( -- spring particule )
-    2 -200 200 [a,b] [ random ] curry replicate { 0 0 } 1 t <particule>
+    random-particule
     2 -200 200 [a,b] [ random ] curry replicate
     0 1 uniform-random-float 100 random 4 npick <immobile-spring> ;
-
+: random-particules  ( n -- particules )
+    [ random-particule ] replicate ;
 : random-springs ( n -- seq )
     [ random-spring 2array ] replicate concat ;
 ! : <physics-world> ( -- world )
@@ -117,16 +144,23 @@ CONSTRUCTOR: spring ( x v m mobile? k l0 particule -- spring ) ;
 
 : <physics-world> ( -- world )
    physics-world new
-   [
-    { 0 -110 } { 0 0 } 10 t <particule>
-     [ { -5 -45 } { 0 0 } 10.0 t 25.0 60.0 ] keep <spring>
-     [ { 10 0 } { 0 0 } 30.0 t 50.0 80 ] keep <spring>
-     [ { 0 60 } 50.0 70 ] keep <immobile-spring>
-   ] output>array
-   [ { 100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
-   [ { -100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
-   [ { -100 -200 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
-   [ { -100 50 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
+  ! [
+!    { 50 -110 } { 0 0 } 10 t <particule>
+!    { -250 110 } { 40 0 } 10 t <particule>
+    ! { -150 50 } { 40 0 } 10 t <particule>
+    ! { 150 50 } { -70 0 } 10 t <particule>
+    ! { -150 150 } { 40 -40 } 10 t <particule>
+  !  { 0 -110 } { 0 0 } 10 t <particule>
+   ! [ { -5 -45 } { 0 0 } 10.0 t 25.0 60.0 ] keep <spring>
+    ! [ { 10 0 } { 0 0 } 30.0 t 50.0 80 ] keep <spring>
+    ! [ { 0 60 } 50.0 70 ] keep <immobile-spring>
+   ! ] output>array
+    500 random-particules
+!   [ { 100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
+!   [ { -100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
+!   [ { -100 -200 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
+   [ { -100 -100 } { 0 0 } 1 f { 320 100 } 1 ] keep <lintel> suffix
+   [ { -500 -140 } { 0 0 } 1 f { 1520 100 } 1 ] keep <lintel> suffix
    >>particules ;
 
 GENERIC: draw-particule ( gadget particule -- )
