@@ -65,14 +65,14 @@ TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
 : (contact-force) ( lintel particule -- force )
     [ normal-vector ] [ nip temp-force>> ] 2bi
     over v. v*n ;
-: (apply-contact) ( lintel particule -- newspeed )
-!    [ 2dup (contact-force) apply-mutual-force ] call ; ! [ ?move-to-side ] 2bi ;
-    [ normal-vector reverse ] [ nip v>> ] 2bi over v. v*n ;
+: project ( v1 v2 -- v3 )
+    over v. v*n ;
 : apply-contact ( lintel particule -- )
-    [ (apply-contact) ] [ v<< ] bi ;
+!    [ 2dup (contact-force) apply-mutual-force ] call ; ! [ ?move-to-side ] 2bi ;
+     [ normal-vector reverse ] keep [ project ] with
+     [ change-v ] [ change-temp-force drop ] bi ;
 : ?apply-contact ( lintel particule -- )
     2dup swap [ x>> ] [ lintel>rect ] bi* contains-point? [ apply-contact ] [ 2drop ] if ;
-
 
 M: spring interact
     [ particule>> ] keep apply-k ;
