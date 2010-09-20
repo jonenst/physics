@@ -4,18 +4,31 @@ USING: accessors arrays calendar calendar.unix colors.constants combinators cons
 combinators.smart fonts generalizations kernel math
 math.functions math.parser math.ranges math.rectangles
 math.vectors opengl random sequences threads ui.gadgets
-ui.gestures ui.render ui.text locals ;
+ui.gestures ui.render ui.text locals delegate namespaces ;
 IN: physics
 
 CONSTANT: g { 0 -9.81 }
+SYMBOL: time-source
+SINGLETON: real-time
+SINGLETON: fixed-time
+TUPLE: (swap-state) x v { temp-force initial: { 0.0 0.0 } } ;
+: <(swap-state)> ( x v -- swap-state )
+    (swap-state) new swap >>v swap >>x ;
+TUPLE: swap-state current-state previous-state ;
+: <swap-state> ( x v -- swap-state )
+    <(swap-state)> dup clone swap-state new
+    swap >>current-state swap >>previous-state ;
 
 GENERIC: interact1 ( particule -- )
 GENERIC: interact2 ( particule -- )
 
 TUPLE: physics-world < gadget particules time running? ;
-TUPLE: particule x v m mobile? { temp-force initial: { 0.0 0.0 } } ;
+TUPLE: particule swap-state m mobile? ;
 TUPLE: spring < particule k l0 particule ;
 TUPLE: lintel < particule dim { bouncy initial: 1.0 } particules ;
+
+PROTOCOL: state-access x>> v>> x<< v<< temp-force>> temp-force<< ;
+CONSULT: state-access particule swap-state>> current-state>> ;
 
 : dv ( f dt m -- dv ) / v*n ; inline
 : dx ( dt v -- dx ) n*v ; inline
@@ -124,9 +137,19 @@ M: fixed-time dt ( world -- dt )
     [ {x,y}>{px,py} ] dip
     [ [ first2 ] [ second - ] bi* 2array ] keep ;
 
-CONSTRUCTOR: lintel ( x v m mobile? dim bouncy particules --  lintel ) ;
-CONSTRUCTOR: particule ( x v m mobile? -- particule ) ;
-CONSTRUCTOR: spring ( x v m mobile? k l0 particule -- spring ) ;
+: new-particule ( x v m mobile? class -- particule )
+    new swap >>mobile? swap >>m
+    [ <swap-state> ] dip swap >>swap-state ;
+: <particule> ( x v m mobile? -- particule )
+    particule new-particule ;
+:: new-lintel ( x v m mobile? dim bouncy particules class --  lintel )
+     x v m mobile? class new-particule dim >>dim bouncy >>bouncy particules >>particules ;
+: <lintel> ( x v m mobile? dim bouncy particules -- lintel )
+    lintel new-lintel ;
+:: new-spring ( x v m mobile? k l0 particule class -- spring )
+    x v m mobile? class new-particule k >>k l0 >>l0 particule >>particule ;
+: <spring> ( x v m mobile? k l0 particule -- spring )
+    spring new-spring ;
 : <immobile-spring> ( x k l0 particule -- spring ) [ { 0 0 } f f ] 3dip <spring> ;
 
 : random-pair ( [a,b] [c,d] -- pair )
