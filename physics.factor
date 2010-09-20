@@ -108,8 +108,12 @@ M: lintel interact2
     [ [ move-particle ] curry each ] } 2cleave ;
 : system-seconds ( -- dt )
     system-micros -6 10^ * ;
-: dt ( world -- dt )
+HOOK: dt time-source ( world -- dt )
+M: real-time dt ( world -- dt )
      system-seconds [ swap time>> - ] [ >>time drop ] 2bi ;
+CONSTANT: debug-dt 0.05
+M: fixed-time dt ( world -- dt )
+    drop debug-dt ;
 : world-loop ( world -- )
    [ dup dt step ] [ relayout-1 ]
    [ dup running?>> [ 1/30 seconds sleep world-loop ] [ drop ] if ] tri ;
@@ -208,3 +212,5 @@ M: physics-world ungraft* stop-demo ;
 physics-world H{
   { T{ button-down f f 1 } [ toggle-demo ] }
 } set-gestures
+
+fixed-time time-source set-global
