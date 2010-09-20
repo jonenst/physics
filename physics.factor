@@ -145,21 +145,26 @@ CONSTRUCTOR: spring ( x v m mobile? k l0 particule -- spring ) ;
 ! : <physics-world> ( -- world )
 !    physics-world new
 !    10 random-springs >>particules ;
-
-: <physics-world> ( -- world )
+: <test-world> ( -- world )
    physics-world new
-  ! [
+    { -10 40 } { 0 0 } 10 t <particule>
+    [ { 10 130 } { 0 0 } 30.0 t 50.0 80 ] keep <spring> 2array
+   [ { -100 -100 } { 0 0 } 1 f { 320 100 } 1 ] keep <lintel> suffix
+   >>particules ;
+: <cool-world> ( -- world )
+   physics-world new
+   [
 !    { 50 -110 } { 0 0 } 10 t <particule>
 !    { -250 110 } { 40 0 } 10 t <particule>
     ! { -150 50 } { 40 0 } 10 t <particule>
     ! { 150 50 } { -70 0 } 10 t <particule>
     ! { -150 150 } { 40 -40 } 10 t <particule>
-  !  { 0 -110 } { 0 0 } 10 t <particule>
+    { -10 40 } { 0 0 } 10 t <particule>
    ! [ { -5 -45 } { 0 0 } 10.0 t 25.0 60.0 ] keep <spring>
-    ! [ { 10 0 } { 0 0 } 30.0 t 50.0 80 ] keep <spring>
-    ! [ { 0 60 } 50.0 70 ] keep <immobile-spring>
-   ! ] output>array
-    500 random-particules
+     [ { 10 130 } { 0 0 } 30.0 t 50.0 80 ] keep <spring>
+     [ { 0 200 } 50.0 70 ] keep <immobile-spring>
+    ] output>array
+    500 random-particules append
 !   [ { 100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
 !   [ { -100 -200 } { 0 0 } 1 f { 20 270 } 1 ] keep <lintel> suffix
 !   [ { -100 -200 } { 0 0 } 1 f { 220 20 } 1 ] keep <lintel> suffix
